@@ -298,6 +298,31 @@
         draw();
         ctx.fillStyle = '#fff'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
         ctx.fillText('Press SPACE to Start', canvas.width / 2, canvas.height / 2);
+        // --- MOBILE TOUCH CONTROLLER ---
+canvas.addEventListener('touchstart', (e) => {
+    // 1. Prevent the screen from scrolling/zooming when tapping
+    e.preventDefault(); 
+    
+    // 2. If the game is stopped, start it!
+    if (!gameRunning) {
+        startGame();
+        return; // Stop here so we don't switch lanes on the first tap
+    }
+
+    // 3. If game is running, find where the user tapped
+    const rect = canvas.getBoundingClientRect();
+    const touchX = e.touches[0].clientX - rect.left;
+    const screenWidth = rect.width;
+
+    // 4. Move the correct car based on screen thirds
+    if (touchX < screenWidth / 3) {
+        moveCar(0); // Left third
+    } else if (touchX < (screenWidth / 3) * 2) {
+        moveCar(1); // Middle third
+    } else {
+        moveCar(2); // Right third
+    }
+}, { passive: false });
     </script>
     <script>
         if ('serviceWorker' in navigator) {
