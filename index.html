@@ -107,13 +107,33 @@
         const baseSpawnInterval = 1400;
         let lastSpawn = [0, 0, 0];
 
-        window.addEventListener('keydown', (e) => {
-            const key = e.key.toLowerCase();
-            if (key === 'f') moveCar(0);
-            if (key === 'g') moveCar(1);
-            if (key === 'h') moveCar(2);
-            if (!gameRunning && e.key === ' ') startGame();
-        });
+        function handleInput(xPosition) {
+    if (!gameRunning) {
+        startGame();
+        return;
+    }
+    
+    const screenWidth = canvas.clientWidth;
+    if (xPosition < screenWidth / 3) moveCar(0);
+    else if (xPosition < (screenWidth / 3) * 2) moveCar(1);
+    else moveCar(2);
+}
+
+// PC Listener
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'f') moveCar(0);
+    if (e.key === 'g') moveCar(1);
+    if (e.key === 'h') moveCar(2);
+    if (e.key === ' ' && !gameRunning) startGame();
+});
+
+// Mobile Listener
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const touchX = e.touches[0].clientX - rect.left;
+    handleInput(touchX);
+}, { passive: false });
 
         function moveCar(index) {
             const car = cars[index];
