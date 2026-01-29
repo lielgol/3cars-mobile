@@ -1,4 +1,4 @@
-const cacheName = '3cars-v2';
+const cacheName = '3cars-v3';
 const assets = ['./', './index.html', './manifest.json'];
 
 self.addEventListener('install', e => {
@@ -8,4 +8,5 @@ self.addEventListener('install', e => {
 self.addEventListener('fetch', e => {
   e.respondWith(caches.match(e.request).then(res => res || fetch(e.request)));
 });
+
 
