@@ -77,49 +77,53 @@
 
     <script>
         const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = 800;
-        canvas.height = 600;
+const ctx = canvas.getContext('2d');
+canvas.width = 800;
+canvas.height = 600;
 
-        let gameRunning = false;
-        let score = 0;
-        let highScore = localStorage.getItem('highScore') || 0;
-        let gameSpeed = 3.5;
-        let lastSpeedIncrease = 0;
+let gameRunning = false;
+let score = 0;
+let highScore = localStorage.getItem('highScore') || 0;
+let gameSpeed = 3.5;
+let lastSpeedIncrease = 0;
 
-        const laneWidth = canvas.width / 6;
-        const carColors = { red: '#f05454', lightBlue: '#4db8ff' };
-        
-        const carWidth = 40;   
-        const carHeight = 65;  
-        const hitboxRatio = 0.5; 
-        const carY = canvas.height - carHeight - 40;
+const laneWidth = canvas.width / 6;
+const carColors = { red: '#f05454', lightBlue: '#4db8ff' };
 
-        // Added 'history' to each car to store trail positions
-        const cars = [
-            { x: laneWidth * 0.5, targetX: laneWidth * 0.5, lane: 0, section: 0, color: carColors.red, history: [] },
-            { x: laneWidth * 2.5, targetX: laneWidth * 2.5, lane: 0, section: 1, color: carColors.lightBlue, history: [] },
-            { x: laneWidth * 4.5, targetX: laneWidth * 4.5, lane: 0, section: 2, color: carColors.red, history: [] }
-        ];
+const carWidth = 40;   
+const carHeight = 65;  
+const hitboxRatio = 0.5; 
+const carY = canvas.height - carHeight - 40;
 
-        let obstacles = [];
-        let collectibles = [];
-        const baseSpawnInterval = 1400;
-        let lastSpawn = [0, 0, 0];
+const cars = [
+    { x: laneWidth * 0.5, targetX: laneWidth * 0.5, lane: 0, section: 0, color: carColors.red, history: [] },
+    { x: laneWidth * 2.5, targetX: laneWidth * 2.5, lane: 0, section: 1, color: carColors.lightBlue, history: [] },
+    { x: laneWidth * 4.5, targetX: laneWidth * 4.5, lane: 0, section: 2, color: carColors.red, history: [] }
+];
 
-        function handleInput(xPosition) {
+let obstacles = [];
+let collectibles = [];
+const baseSpawnInterval = 1400;
+let lastSpawn = [0, 0, 0];
+
+// --- UNIFIED INPUT HANDLER ---
+function handleInput(clientX) {
     if (!gameRunning) {
         startGame();
         return;
     }
     
-    const screenWidth = canvas.clientWidth;
-    if (xPosition < screenWidth / 3) moveCar(0);
-    else if (xPosition < (screenWidth / 3) * 2) moveCar(1);
+    const rect = canvas.getBoundingClientRect();
+    // Scale the touch X to the game's internal 800px width
+    const scaleX = canvas.width / rect.width;
+    const x = (clientX - rect.left) * scaleX;
+
+    if (x < canvas.width / 3) moveCar(0);
+    else if (x < (canvas.width / 3) * 2) moveCar(1);
     else moveCar(2);
 }
 
-// PC Listener
+// PC
 window.addEventListener('keydown', (e) => {
     if (e.key === 'f') moveCar(0);
     if (e.key === 'g') moveCar(1);
@@ -127,240 +131,188 @@ window.addEventListener('keydown', (e) => {
     if (e.key === ' ' && !gameRunning) startGame();
 });
 
-// Mobile Listener
+// Mobile - Only ONE listener here now
 canvas.addEventListener('touchstart', (e) => {
-    // 1. Prevent default to stop scrolling/zooming which breaks focus
-    if (e.cancelable) e.preventDefault(); 
-    
-    // 2. Get the exact touch coordinates relative to the canvas
-    const rect = canvas.getBoundingClientRect();
-    const touch = e.touches[0];
-    const touchX = (touch.clientX - rect.left) * (canvas.width / rect.width);
-
-    // 3. Logic Branch: Start vs Play
-    if (!gameRunning) {
-        startGame();
-    } else {
-        const screenWidth = canvas.width;
-        // Lane switching logic based on 3 horizontal sections
-        if (touchX < screenWidth / 3) {
-            moveCar(0);
-        } else if (touchX < (screenWidth / 3) * 2) {
-            moveCar(1);
-        } else {
-            moveCar(2);
-        }
-    }
+    e.preventDefault(); // Stop zoom/scroll
+    handleInput(e.touches[0].clientX);
 }, { passive: false });
 
-        function moveCar(index) {
-            const car = cars[index];
-            car.lane = car.lane === 0 ? 1 : 0;
-            car.targetX = laneWidth * (index * 2 + car.lane + 0.5);
+function moveCar(index) {
+    const car = cars[index];
+    car.lane = car.lane === 0 ? 1 : 0;
+    car.targetX = laneWidth * (index * 2 + car.lane + 0.5);
+}
+
+function spawnObstacles() {
+    const now = Date.now();
+    for (let section = 0; section < 3; section++) {
+        if (now - lastSpawn[section] > baseSpawnInterval + (Math.random() - 0.5) * 600) {
+            lastSpawn[section] = now;
+            const isCollectible = Math.random() < 0.35;
+            const lane = Math.floor(Math.random() * 2);
+            const x = laneWidth * (section * 2 + lane) + laneWidth / 2;
+            const itemDim = 60; 
+
+            const config = { x, y: -80, width: itemDim, height: itemDim, lane, section };
+            if (isCollectible) collectibles.push({...config, missed: false});
+            else obstacles.push(config);
         }
+    }
+}
 
-        function spawnObstacles() {
-            const now = Date.now();
-            for (let section = 0; section < 3; section++) {
-                if (now - lastSpawn[section] > baseSpawnInterval + (Math.random() - 0.5) * 600) {
-                    lastSpawn[section] = now;
-                    const isCollectible = Math.random() < 0.35;
-                    const lane = Math.floor(Math.random() * 2);
-                    const x = laneWidth * (section * 2 + lane) + laneWidth / 2;
-                    const itemDim = 60; 
-
-                    const config = { x, y: -80, width: itemDim, height: itemDim, lane, section };
-                    if (isCollectible) collectibles.push({...config, missed: false});
-                    else obstacles.push(config);
-                }
+function updateObstacles() {
+    [obstacles, collectibles].forEach(arr => {
+        for (let i = arr.length - 1; i >= 0; i--) {
+            arr[i].y += gameSpeed;
+            if (arr[i].y > canvas.height) {
+                if (arr === collectibles && !arr[i].missed) { gameOver(); return; }
+                arr.splice(i, 1);
             }
         }
+    });
+    if (score - lastSpeedIncrease > 15) {
+        gameSpeed += 0.15;
+        lastSpeedIncrease = score;
+    }
+}
 
-        function updateObstacles() {
-            [obstacles, collectibles].forEach(arr => {
-                for (let i = arr.length - 1; i >= 0; i--) {
-                    arr[i].y += gameSpeed;
-                    if (arr[i].y > canvas.height) {
-                        if (arr === collectibles && !arr[i].missed) { gameOver(); return; }
-                        arr.splice(i, 1);
-                    }
-                }
-            });
-            if (score - lastSpeedIncrease > 15) {
-                gameSpeed += 0.15;
-                lastSpeedIncrease = score;
-            }
-        }
+function checkCollisions() {
+    for (let car of cars) {
+        const hW = carWidth * hitboxRatio;
+        const hH = carHeight * hitboxRatio;
+        const cL = car.x - hW / 2;
+        const cR = car.x + hW / 2;
+        const cT = carY + (carHeight - hH) / 2;
+        const cB = cT + hH;
 
-        function checkCollisions() {
-            for (let car of cars) {
-                const hW = carWidth * hitboxRatio;
-                const hH = carHeight * hitboxRatio;
-                const cL = car.x - hW / 2;
-                const cR = car.x + hW / 2;
-                const cT = carY + (carHeight - hH) / 2;
-                const cB = cT + hH;
-
-                [obstacles, collectibles].forEach(arr => {
-                    const isCol = (arr === collectibles);
-                    for (let j = arr.length - 1; j >= 0; j--) {
-                        const item = arr[j];
-                        // Check if item is in the same horizontal pair of lanes as the car
-                        if (item.section === car.section) {
-                            if (cR > item.x - item.width/2 && cL < item.x + item.width/2 && 
-                                cB > item.y && cT < item.y + item.height) {
-                                if (isCol) {
-                                    item.missed = true;
-                                    arr.splice(j, 1);
-                                    score += 1;
-                                } else {
-                                    gameOver();
-                                }
-                            }
+        [obstacles, collectibles].forEach(arr => {
+            const isCol = (arr === collectibles);
+            for (let j = arr.length - 1; j >= 0; j--) {
+                const item = arr[j];
+                if (item.section === car.section) {
+                    if (cR > item.x - item.width/2 && cL < item.x + item.width/2 && 
+                        cB > item.y && cT < item.y + item.height) {
+                        if (isCol) {
+                            item.missed = true;
+                            arr.splice(j, 1);
+                            score += 1;
+                        } else {
+                            gameOver();
                         }
                     }
-                });
+                }
             }
-        }
+        });
+    }
+}
 
-        function drawObstacles() {
-            const drawShape = (item, isCircle) => {
-                const color = (item.section === 1) ? carColors.lightBlue : carColors.red;
-                const size = item.width * 0.7;
-                const centerY = item.y + item.height / 2;
+function drawObstacles() {
+    const drawShape = (item, isCircle) => {
+        const color = (item.section === 1) ? carColors.lightBlue : carColors.red;
+        const size = item.width * 0.7;
+        const centerY = item.y + item.height / 2;
 
-                ctx.fillStyle = color;
-                if (isCircle) { ctx.beginPath(); ctx.arc(item.x, centerY, size/2, 0, Math.PI*2); ctx.fill(); }
-                else { ctx.beginPath(); ctx.roundRect(item.x - size/2, centerY - size/2, size, size, 8); ctx.fill(); }
+        ctx.fillStyle = color;
+        if (isCircle) { ctx.beginPath(); ctx.arc(item.x, centerY, size/2, 0, Math.PI*2); ctx.fill(); }
+        else { ctx.beginPath(); ctx.roundRect(item.x - size/2, centerY - size/2, size, size, 8); ctx.fill(); }
 
-                ctx.fillStyle = '#ffffff';
-                const mSize = size * 0.75;
-                if (isCircle) { ctx.beginPath(); ctx.arc(item.x, centerY, mSize/2, 0, Math.PI*2); ctx.fill(); }
-                else { ctx.beginPath(); ctx.roundRect(item.x - mSize/2, centerY - mSize/2, mSize, mSize, 6); ctx.fill(); }
+        ctx.fillStyle = '#ffffff';
+        const mSize = size * 0.75;
+        if (isCircle) { ctx.beginPath(); ctx.arc(item.x, centerY, mSize/2, 0, Math.PI*2); ctx.fill(); }
+        else { ctx.beginPath(); ctx.roundRect(item.x - mSize/2, centerY - mSize/2, mSize, mSize, 6); ctx.fill(); }
 
-                ctx.fillStyle = color;
-                const iSize = size * 0.4;
-                if (isCircle) { ctx.beginPath(); ctx.arc(item.x, centerY, iSize/2, 0, Math.PI*2); ctx.fill(); }
-                else { ctx.beginPath(); ctx.roundRect(item.x - iSize/2, centerY - iSize/2, iSize, iSize, 4); ctx.fill(); }
-            };
-            obstacles.forEach(o => drawShape(o, false));
-            collectibles.forEach(c => drawShape(c, true));
-        }
+        ctx.fillStyle = color;
+        const iSize = size * 0.4;
+        if (isCircle) { ctx.beginPath(); ctx.arc(item.x, centerY, iSize/2, 0, Math.PI*2); ctx.fill(); }
+        else { ctx.beginPath(); ctx.roundRect(item.x - iSize/2, centerY - iSize/2, iSize, iSize, 4); ctx.fill(); }
+    };
+    obstacles.forEach(o => drawShape(o, false));
+    collectibles.forEach(c => drawShape(c, true));
+}
 
-        function draw() {
-            ctx.fillStyle = '#1e2752'; 
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw lane lines
-            for (let i = 1; i < 6; i++) {
-                // Thicker lines for main section differentiation (between 2-3 and 4-5)
-                const isBorder = (i === 2 || i === 4);
-                ctx.strokeStyle = isBorder ? '#4a5b8f' : '#2a366b';
-                ctx.lineWidth = isBorder ? 6 : 2;
-                
-                ctx.beginPath();
-                ctx.moveTo(i * laneWidth, 0);
-                ctx.lineTo(i * laneWidth, canvas.height);
-                ctx.stroke();
-            }
-
-            drawObstacles();
-
-            for (let car of cars) {
-                // Smooth horizontal movement
-                car.x += (car.targetX - car.x) * 0.25;
-
-                // Update Trail History
-                car.history.push({ x: car.x, y: carY });
-                if (car.history.length > 8) car.history.shift();
-
-                // Draw Trail
-                car.history.forEach((pos, index) => {
-                    const alpha = index / car.history.length;
-                    ctx.globalAlpha = alpha * 0.3;
-                    ctx.fillStyle = car.color;
-                    ctx.beginPath();
-                    ctx.roundRect(pos.x - carWidth/2, pos.y + (10 - index), carWidth, carHeight, 6);
-                    ctx.fill();
-                });
-                ctx.globalAlpha = 1.0;
-
-                // Draw Car
-                const x = car.x - carWidth / 2;
-                ctx.fillStyle = '#ffffff';
-                ctx.beginPath();
-                ctx.roundRect(x - 2, carY - 2, carWidth + 4, carHeight + 4, 8);
-                ctx.fill();
-
-                ctx.fillStyle = car.color;
-                ctx.beginPath();
-                ctx.roundRect(x, carY, carWidth, carHeight, 6);
-                ctx.fill();
-                
-                ctx.fillStyle = '#121a38';
-                const winW = carWidth * 0.55;
-                const winH = carHeight * 0.35;
-                ctx.beginPath();
-                ctx.roundRect(x + (carWidth - winW)/2, carY + (carHeight - winH)/2, winW, winH, 3);
-                ctx.fill();
-            }
-        }
-
-        function update() {
-            if (!gameRunning) return;
-            spawnObstacles();
-            updateObstacles();
-            checkCollisions();
-            draw();
-            document.getElementById('score').textContent = `${score}`;
-            requestAnimationFrame(update);
-        }
-
-        function startGame() {
-            gameRunning = true; score = 0; gameSpeed = 3.5; obstacles = []; collectibles = [];
-            lastSpawn = [Date.now(), Date.now()+400, Date.now()+800];
-            cars.forEach(c => c.history = []);
-            document.getElementById('gameOver').style.display = 'none';
-            update();
-        }
-
-        function gameOver() {
-            gameRunning = false;
-            if (score > highScore) { highScore = score; localStorage.setItem('highScore', highScore); }
-            document.getElementById('finalScore').textContent = `Score: ${score}`;
-            document.getElementById('highScore').textContent = `High Score: ${highScore}`;
-            document.getElementById('gameOver').style.display = 'block';
-        }
-
-        function restartGame() { startGame(); }
-        draw();
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
-        ctx.fillText('Tap or Press SPACE to Start v1', canvas.width / 2, canvas.height / 2);
-        // --- MOBILE TOUCH CONTROLLER ---
-canvas.addEventListener('touchstart', (e) => {
-    // 1. Prevent the screen from scrolling/zooming when tapping
-    e.preventDefault(); 
+function draw() {
+    ctx.fillStyle = '#1e2752'; 
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // 2. If the game is stopped, start it!
-    if (!gameRunning) {
-        startGame();
-        return; // Stop here so we don't switch lanes on the first tap
+    for (let i = 1; i < 6; i++) {
+        const isBorder = (i === 2 || i === 4);
+        ctx.strokeStyle = isBorder ? '#4a5b8f' : '#2a366b';
+        ctx.lineWidth = isBorder ? 6 : 2;
+        ctx.beginPath();
+        ctx.moveTo(i * laneWidth, 0);
+        ctx.lineTo(i * laneWidth, canvas.height);
+        ctx.stroke();
     }
 
-    // 3. If game is running, find where the user tapped
-    const rect = canvas.getBoundingClientRect();
-    const touchX = e.touches[0].clientX - rect.left;
-    const screenWidth = rect.width;
+    drawObstacles();
 
-    // 4. Move the correct car based on screen thirds
-    if (touchX < screenWidth / 3) {
-        moveCar(0); // Left third
-    } else if (touchX < (screenWidth / 3) * 2) {
-        moveCar(1); // Middle third
-    } else {
-        moveCar(2); // Right third
+    for (let car of cars) {
+        car.x += (car.targetX - car.x) * 0.25;
+        car.history.push({ x: car.x, y: carY });
+        if (car.history.length > 8) car.history.shift();
+
+        car.history.forEach((pos, index) => {
+            const alpha = index / car.history.length;
+            ctx.globalAlpha = alpha * 0.3;
+            ctx.fillStyle = car.color;
+            ctx.beginPath();
+            ctx.roundRect(pos.x - carWidth/2, pos.y + (10 - index), carWidth, carHeight, 6);
+            ctx.fill();
+        });
+        ctx.globalAlpha = 1.0;
+
+        const x = car.x - carWidth / 2;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.roundRect(x - 2, carY - 2, carWidth + 4, carHeight + 4, 8);
+        ctx.fill();
+
+        ctx.fillStyle = car.color;
+        ctx.beginPath();
+        ctx.roundRect(x, carY, carWidth, carHeight, 6);
+        ctx.fill();
+        
+        ctx.fillStyle = '#121a38';
+        const winW = carWidth * 0.55;
+        const winH = carHeight * 0.35;
+        ctx.beginPath();
+        ctx.roundRect(x + (carWidth - winW)/2, carY + (carHeight - winH)/2, winW, winH, 3);
+        ctx.fill();
     }
-}, { passive: false });
+}
+
+function update() {
+    if (!gameRunning) return;
+    spawnObstacles();
+    updateObstacles();
+    checkCollisions();
+    draw();
+    document.getElementById('score').textContent = `${score}`;
+    requestAnimationFrame(update);
+}
+
+function startGame() {
+    gameRunning = true; score = 0; gameSpeed = 3.5; obstacles = []; collectibles = [];
+    lastSpawn = [Date.now(), Date.now()+400, Date.now()+800];
+    cars.forEach(c => c.history = []);
+    document.getElementById('gameOver').style.display = 'none';
+    update();
+}
+
+function gameOver() {
+    gameRunning = false;
+    if (score > highScore) { highScore = score; localStorage.setItem('highScore', highScore); }
+    document.getElementById('finalScore').textContent = `Score: ${score}`;
+    document.getElementById('highScore').textContent = `High Score: ${highScore}`;
+    document.getElementById('gameOver').style.display = 'block';
+}
+
+function restartGame() { startGame(); }
+
+// Initial view
+draw();
+ctx.fillStyle = '#fff'; ctx.font = 'bold 32px Arial'; ctx.textAlign = 'center';
+ctx.fillText('Tap or Space to Start v2', canvas.width / 2, canvas.height / 2);
     </script>
     <script>
         if ('serviceWorker' in navigator) {
