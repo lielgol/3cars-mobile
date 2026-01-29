@@ -129,10 +129,28 @@ window.addEventListener('keydown', (e) => {
 
 // Mobile Listener
 canvas.addEventListener('touchstart', (e) => {
-    e.preventDefault();
+    // 1. Prevent default to stop scrolling/zooming which breaks focus
+    if (e.cancelable) e.preventDefault(); 
+    
+    // 2. Get the exact touch coordinates relative to the canvas
     const rect = canvas.getBoundingClientRect();
-    const touchX = e.touches[0].clientX - rect.left;
-    handleInput(touchX);
+    const touch = e.touches[0];
+    const touchX = (touch.clientX - rect.left) * (canvas.width / rect.width);
+
+    // 3. Logic Branch: Start vs Play
+    if (!gameRunning) {
+        startGame();
+    } else {
+        const screenWidth = canvas.width;
+        // Lane switching logic based on 3 horizontal sections
+        if (touchX < screenWidth / 3) {
+            moveCar(0);
+        } else if (touchX < (screenWidth / 3) * 2) {
+            moveCar(1);
+        } else {
+            moveCar(2);
+        }
+    }
 }, { passive: false });
 
         function moveCar(index) {
